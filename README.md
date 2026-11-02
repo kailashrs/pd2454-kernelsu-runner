@@ -35,7 +35,7 @@ support by this runner. Do not bypass the checks to try another firmware.
 | `src/ksupatch.c` | Validate the matched ELF and bind 50 function symbols using that boot's slide; no instruction rewriting or data snapshots |
 | `src/insmodf.c` | One `finit_module` call, flags zero, preserved errno; no forced-load fallback |
 | `src/ksu_stage.sh` | Readable copy of the stage embedded in timer.c; require KernelSU `Live` and restore enforcing on success |
-| `run.sh` | One host entrypoint that validates, stages, launches, collects evidence and optionally reboots/retries up to the requested total attempt count |
+| `run.sh` | The single host entrypoint for device discovery/checks, payload staging, launch monitoring, evidence collection, and bounded reboot/retries |
 
 KernelSU itself now resolves its private data, initializes credentials and
 registers the compatible probes. The runner leaves global kprobe state
@@ -103,15 +103,13 @@ For an explicitly requested sequence that can reboot the selected phone:
 `--device-id` is the expected `getprop ro.serialno`, not a wireless address.
 USB is preferred. macOS Bonjour (`dns-sd`) can rediscover already-paired
 wireless ADB after port changes; this does not pair or authorize devices.
-Other hosts require a stable visible transport. The controller waits up to
-five minutes for a boot-ready target. It stops for diagnosis after an
-observed insertion attempt rather than repeatedly executing failed module
-initialization. The attempt count is the maximum total number of root attempts, including the
-first boot. Run only one controller for a device at a time; no cross-process
-lock is implemented. Stop the host
-controller to end retries, and use a clean reboot to recover any parked
-bootstrap holders. The published controller has host checks, not a repeated
-live-phone reboot campaign.
+Other hosts require a stable visible transport. The script waits up to five minutes for a boot-ready target. It stops for
+diagnosis after an observed insertion attempt rather than repeatedly executing
+failed module initialization. The attempt count is the maximum total number of
+root attempts, including the first boot. Run only one copy of `run.sh` per
+device; no cross-process lock is implemented. Stop the script to end retries,
+and use a clean reboot to recover parked bootstrap holders. The script has host
+checks, not a repeated live-phone reboot campaign.
 
 Omit `--reboot-first` to preserve an already-loaded module;
 otherwise it explicitly reboots before checking for that module.
