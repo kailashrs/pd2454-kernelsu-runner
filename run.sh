@@ -7,11 +7,13 @@ COUNT=10
 if [[ $# -gt 0 && $1 =~ ^[0-9]+$ ]]; then COUNT=$1; shift; fi
 DEVICE_ID=
 REBOOT_FIRST=0
+DEBUG=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --device-id) [[ $# -ge 2 ]] || { echo 'missing --device-id value' >&2; exit 2; }; DEVICE_ID=$2; shift 2 ;;
+        --debug) DEBUG=1; shift ;;
         --reboot-first) REBOOT_FIRST=1; shift ;;
-        -h|--help) echo 'Usage: ./run.sh [attempt-count 1..100] --device-id ro.serialno [--reboot-first]'; exit 0 ;;
+        -h|--help) echo 'Usage: ./run.sh [attempt-count 1..100] --device-id ro.serialno [--reboot-first] [--debug]'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -29,7 +31,8 @@ KNOWN_ENDPOINTS=""
 
 record() {
     line="$(date '+%Y-%m-%d %H:%M:%S') $*"
-    printf '%s\n' "$line" | tee -a "$JOURNAL"
+    printf '%s\n' "$line"
+    if [[ $DEBUG == 1 ]]; then printf '%s\n' "$line" >> "$JOURNAL"; fi
 }
 adb_target() { adb -s "$SERIAL" "$@"; }
 shell_target() { adb_target shell "$1" 2>/dev/null | tr -d '\r'; }
@@ -94,7 +97,9 @@ check_target() {
 pull_evidence() {
     destination=$1
     mkdir -p "$destination"
-    for name in iq.log ksu-trace.log ksu-init-trace.log kmsg-this-boot.txt ksu_slide; do
+    adb_target pull /data/local/tmp/iq.log "$destination/iq.log" >/dev/null 2>&1 || true
+    [[ $DEBUG == 1 ]] || return 0
+    for name in ksu-trace.log ksu-init-trace.log kmsg-this-boot.txt ksu_slide; do
         adb_target pull "/data/local/tmp/$name" "$destination/$name" >/dev/null 2>&1 || true
     done
     adb_target shell 'getprop ro.boot.bootreason; getprop sys.boot.reason; getprop ro.boot.bootreasondetail' >"$destination/bootreason.txt" 2>/dev/null || true
@@ -127,7 +132,8 @@ run_attempt() {
     fi
     stage_payloads || { record 'REFUSED payload_staging_failed'; return 2; }
     record "ATTEMPT_LAUNCH number=$attempt"
-    adb_target shell "cd /data/local/tmp; rm -f iq.log hkd_base hkd_go hkd_open kmsg-this-boot.txt pstore*.bin; setsid sh -c './ic98260 fake >iq.log 2>&1 </dev/null &'" >/dev/null 2>&1 || {
+    if [[ $DEBUG == 1 ]]; then adb_target shell 'rm -f /data/local/tmp/kmsg-this-boot.txt /data/local/tmp/pstore*.bin' >/dev/null 2>&1 || true; fi
+    adb_target shell "cd /data/local/tmp; rm -f iq.log hkd_base hkd_go hkd_open; KSU_RUNNER_DEBUG=$DEBUG setsid sh -c './ic98260 fake >iq.log 2>&1 </dev/null &'" >/dev/null 2>&1 || {
         record 'REFUSED launch_command_failed'; return 2;
     }
     elapsed=0; outcome=RUNNING
@@ -144,13 +150,17 @@ run_attempt() {
     done
     [[ $outcome != RUNNING ]] || outcome=WINDOW-ELAPSED
     pull_evidence "$output"
+    if [[ $DEBUG == 1 ]]; then
     adb_target shell 'getenforce; cat /proc/sys/kernel/random/boot_id; grep kernelsu /proc/modules' >"$output/state.txt" 2>&1 || true
     printf 'outcome=%s\n' "$outcome" >"$output/outcome.txt"
+    fi
     record "ATTEMPT_RESULT number=$attempt outcome=$outcome evidence=$output"
     case "$outcome" in
         DONE|MODULE-LISTED)
+            if [[ $DEBUG == 1 ]]; then
             adb_target shell 'timeout 5 /data/local/tmp/ksud debug info' >"$output/driver-info.txt" 2>&1 || true
             adb_target shell "timeout 5 sh -c 'printf \"id\\nexit\\n\" | /data/local/tmp/ksud debug su'" >"$output/root-check.txt" 2>&1 || true
+            fi
             return 0;;
     esac
     if grep -Fq '[ksu] direct insmodf' "$output/iq.log" 2>/dev/null; then return 3; fi

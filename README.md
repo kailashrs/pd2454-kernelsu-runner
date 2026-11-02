@@ -135,3 +135,18 @@ The packaging changes (explicit serial selection and public repository
 paths) are host-checked; they have not been rerun on the phone. No private
 device identifiers, live KASLR values, logs, binaries or credentials are
 included. See `LICENSE` and `NOTICE` for per-component provenance.
+
+## Optional debug logs
+
+The normal runner log (`iq.log`) is always written. Additional kernel/crash
+snapshots, separate module-stage traces, host journal and root/driver diagnostic
+files are off by default. Enable them explicitly with:
+
+```sh
+./run.sh 10 --device-id YOUR_RO_SERIALNO --debug
+```
+
+The wrapper forwards `KSU_RUNNER_DEBUG=1` to the native runner and its child.
+Without that flag it forwards `0`, so inherited environment settings cannot
+silently enable extra logging. `tests/test_debug_logging.py` checks that the
+normal path performs no snapshot I/O and stage messages remain on stdout.
