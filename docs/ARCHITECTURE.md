@@ -7,7 +7,7 @@ target-by-target reverse-engineering record is in
 repository.
 
 ```
-host:  run98260.sh ──(adb, SERIAL)──► /data/local/tmp/ic98260 fake
+host:  run.sh ──(adb, SERIAL)──► /data/local/tmp/ic98260 fake
               │
               │ staged: ic98260, ksupatch, insmodf, kernelsu.ko
               │        (sha256-verified after push)
@@ -27,10 +27,12 @@ device: ic98260 "fake" (a single process tree)
                                  /proc/modules check → enforce=1 → KSU_LOADED
 ```
 
-The runner wrapper is deliberately weak: it stages, launches, classifies and
-collects. It never reboots, never kills a device process, and never retries
-inside one invocation. `retry-controller.py` adds the reboot/retry loop on
-top, with its own stricter stop rules (see its `--help` and README).
+`run.sh` is the sole host entrypoint. It discovers the selected ADB device,
+checks the exact target and fresh-boot gates, stages and verifies payloads,
+launches one detached attempt, classifies its result, and collects evidence.
+Its attempt budget defaults to ten total attempts across boots; it reboots only
+between eligible pre-insertion failures. It stops when a module is listed or
+an insertion attempt needs diagnosis. It never kills parked device processes.
 
 ---
 
@@ -377,7 +379,7 @@ parked exploit (host `kill`, device override, timeout kill) leaves a
 half-pinned page but also kills the sockets keeping the *fake cred* page
 pinned, and init reaping a stale-timer zombie panics the kernel. Do
 not `kill`, `timeout`, or force-stop `ic98260`; end a failed boot with a
-reboot (that is all `retry-controller.py` ever does).
+reboot (the retry path in `run.sh` performs recovery reboots only).
 
 ---
 
@@ -397,13 +399,12 @@ Two processes (parent parks, child works) negotiate via files in
 | `ksu-trace.log` | everyone | stage-worker lifecycle markers (append+fsync; survives most panics) |
 | `iq.log` | overall | merged stdout/stderr of `ic98260 fake` (its `dmesg` tail is the oops capture) |
 
-All of these are consumed by the host evidence collector (`pull_evidence`
-in `run98260.sh`) without any stateful assumptions — a failed boot is
+All of these are consumed by `run.sh`’s host evidence collector (`pull_evidence`) without stateful assumptions — a failed boot is
 digested from whatever survived.
 
 ### `iq.log` classification keys
 
-`classify()` in `run98260.sh` maps the log to an outcome. Markers that
+The outcome classifier in `run.sh` maps the log to an outcome. Markers that
 matter when reading a log by hand:
 
 | marker | meaning |
@@ -422,18 +423,15 @@ matter when reading a log by hand:
 
 ## 6. Operations
 
-- **One runner at a time.** `run98260.sh` itself never runs a second
-  copy; two interleaved host-side runners make plants and binary flips
-  worse than the underlying race. There is *no cross-process lock* — an
-  operator (`pgrep -f run98260`) is the lock. The controller likewise
-  refuses to be run twice on one device only by convention.
-- **Fresh boot required.** The wrapper refuses to start if
-  `kernelsu` is listed or an `ic98260` process is alive. The controller
-  recovers a parked exploit with an authorized reboot first.
-- **Staging.** `ensure_binary` pushes the four expected files, verifies
+- **One runner at a time.** `run.sh` has no cross-process lock. Run one copy
+  per device; overlapping staging or attempts can corrupt files or device state.
+- **Fresh boot required.** `run.sh` refuses to start an attempt if `kernelsu`
+  is listed or `ic98260` is alive. It recovers a parked holder by rebooting,
+  then waits for a new boot ID before continuing.
+- **Staging.** `run.sh` pushes and hashes the four expected files, verifies
   each sha256 on device, and removes stale experiment markers
   (`ksupatch_neuter`, `ksupatch_skip` — legacy, deliberately cleared).
-- **Evidence.** One `logs/camp-<ts>/attempt-01/` per wrapper run, always
+- **Evidence.** One `logs/camp-<ts>/attempt-NN/` for each attempt, always
   appended to (never pruned): `iq.log`, `kmsg-this-boot.txt`,
   `ksu-trace.log`, `ksu-init-trace.log` (if written on the boot that
   survived), boot reason properties, any pstore buckets present. `logs/`

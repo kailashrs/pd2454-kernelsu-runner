@@ -83,10 +83,10 @@ Install the official matching KernelSU Manager beforehand. Select the
 intended ADB transport explicitly:
 
 ```sh
-./run.sh 1 --device-id your-ro.serialno
+./run.sh 1 --device-id YOUR_RO_SERIALNO
 ```
 
-The wrapper stages only `ic98260`, `ksupatch`, `insmodf` and `kernelsu.ko`
+`run.sh` stages `ic98260`, `ksupatch`, `insmodf` and `kernelsu.ko`
 under `/data/local/tmp`. It collects evidence under ignored `logs/` and
 stops when a module is listed. Check that the module is **Live**, open
 Manager and verify its Working status, original library, driver handle,
@@ -97,7 +97,7 @@ it, so missing debug output alone is not proof of module failure.
 For an explicitly requested sequence that can reboot the selected phone:
 
 ```sh
-./run.sh 10 --device-id your-ro.serialno --reboot-first
+./run.sh 10 --device-id YOUR_RO_SERIALNO --reboot-first
 ```
 
 `--device-id` is the expected `getprop ro.serialno`, not a wireless address.
