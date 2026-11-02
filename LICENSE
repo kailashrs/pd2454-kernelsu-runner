@@ -1,0 +1,12 @@
+This repository contains separately built components with different licenses.
+
+src/timer/: PD2454 port carried from the local pd2454-oos7 source bundle,
+which supplies Apache-2.0; timer.c credits the MIT-licensed
+woshigenm/CVE-2026-98260 and other 98260 ports. Preserve both sets of notices.
+See LICENSES/Apache-2.0.txt, LICENSES/MIT.txt and NOTICE.
+
+src/ksupatch.c and src/insmodf.c: GPL-2.0-only, as marked in each file.
+See LICENSES/GPL-2.0-only.txt.
+
+New orchestration scripts, tests and documentation: Apache-2.0.
+The separately supplied KernelSU module retains its own upstream licensing.

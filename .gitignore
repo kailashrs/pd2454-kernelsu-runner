@@ -1,0 +1,9 @@
+/bin/
+/ksu/*.ko
+/logs/
+/loop-recovery/
+/attempt-journal.jsonl
+__pycache__/
+*.pyc
+*.dSYM/
+.DS_Store

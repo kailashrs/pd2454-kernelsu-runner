@@ -1,0 +1,19 @@
+PD2454 KernelSU self-data runner
+
+This packages the matched temporary-root runner used with the PD2454
+KernelSU compatibility profile. It is derived from the existing local
+pd2454-oos7 adaptation. timer.c attributes its bootstrap machinery to
+woshigenm/CVE-2026-98260 (MIT) and other 98260 ports:
+https://github.com/woshigenm/CVE-2026-98260
+Copyright (c) 2026 woshigenm
+
+Changes in this adaptation include target-specific handling, preserving
+canonical global kprobe state, stopping guard plants after KernelSU is Live,
+removing kernel-data snapshots, a function-only symbol binder, one-shot
+flags-zero insertion, exact-target staging and bounded transport recovery.
+
+The inherited bundle's notice is retained verbatim in
+LICENSES/INHERITED-NOTICE.txt. Its historical Xiaomi/CVE-2026-64560 wording
+is not a description of this PD2454/CVE-2026-98260 runner. The historical
+OnePlus banner in timer.c likewise describes the original port, not the
+validated target. No assertion of authorship over upstream code is made.
