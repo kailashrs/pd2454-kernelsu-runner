@@ -370,7 +370,7 @@ Per plant two independent hazards:
 | failure | observed | handling |
 |---|---|---|
 | **Burst miss** — a system allocation owns the page first | `[-] plantN burst missed` | plant fails; the erase has already written through a stale node into memory we do not own. In-run replant wedges the kernel (watchdog), so the process **parks**; ONLY reboot cleans up |
-| **Mid-burst panic** — the erase hit a page never re-owned | log cuts off between zombie creation and `free_seen`; device drops | the *next* run's evidence pull collects the pstore/bootreason; nothing else possible |
+| **Mid-burst panic** — the erase hit a page never re-owned | log cuts off between zombie creation and `free_seen`; device drops | the next run with `--debug` can collect pstore/bootreason if available |
 
 There is exactly one success path for the load, and once it happens the
 parent plants nothing further, the stage restores enforcing, and the child
@@ -396,7 +396,7 @@ Two processes (parent parks, child works) negotiate via files in
 | `hkd_extras` | child → parent | guard-owned heap-kprobe node addresses found by the live sweep, one per line; rewritten by the child after each `R` |
 | `ksu_slide` | child → users | hex kernel slide for the stage script |
 | `ksu_stage.sh` | child | written at each stage invocation by `write_ksu_script` |
-| `ksu-trace.log` | everyone | stage-worker lifecycle markers (append+fsync; survives most panics) |
+| `ksu-trace.log` | everyone | debug-only stage-worker lifecycle markers (append+fsync; survives most panics) |
 | `iq.log` | overall | merged stdout/stderr of `ic98260 fake` (its `dmesg` tail is the oops capture) |
 
 All of these are consumed by `run.sh`’s host evidence collector (`pull_evidence`) without stateful assumptions — a failed boot is
@@ -431,11 +431,12 @@ matter when reading a log by hand:
 - **Staging.** `run.sh` pushes and hashes the four expected files, verifies
   each sha256 on device, and removes stale experiment markers
   (`ksupatch_neuter`, `ksupatch_skip` — legacy, deliberately cleared).
-- **Evidence.** One `logs/camp-<ts>/attempt-NN/` for each attempt, always
-  appended to (never pruned): `iq.log`, `kmsg-this-boot.txt`,
-  `ksu-trace.log`, `ksu-init-trace.log` (if written on the boot that
-  survived), boot reason properties, any pstore buckets present. `logs/`
-  is git-ignored and may contain live addresses — never commit it.
+- **Evidence.** `iq.log` is always retained in `logs/camp-<ts>/attempt-N/`.
+  `--debug` additionally enables snapshot/trace generation and collection of
+  `kmsg-this-boot.txt`, `ksu-trace.log`, boot reasons, pstore buckets, module
+  state and root/driver diagnostics. Those files are off by default. Runtime
+  handshake and slide files remain functional inputs rather than log archives.
+  `logs/` is ignored and may contain live addresses; never commit it.
 - **Device hygiene.** Reading `/dev/kmsg` beats restricted `dmesg` for
   kernel output collection. Toybox `grep` on device: `grep -E "a|b"`
   does not do what you expect — use `grep -e a -e b` twice. Reads of
