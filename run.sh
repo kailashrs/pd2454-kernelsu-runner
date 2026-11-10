@@ -121,6 +121,18 @@ stage_payloads() {
 }
 remote_has() { adb_target shell "grep -Fq '$1' /data/local/tmp/iq.log" >/dev/null 2>&1; }
 
+# module_loaded_via_stamp: boot-scoped root-side marker (hidden-module profile
+# no longer lists in /proc/modules, and the gated handshake must fail for this
+# unprivileged shell). Defined at top level: the main loop calls it before
+# run_attempt() has ever executed.
+module_loaded_via_stamp() {
+    local stamp boot_id
+    stamp=$(shell_target 'cat /data/local/tmp/ksu-live.stamp 2>/dev/null' 2>/dev/null | tr -d ' \r\n')
+    [[ -n $stamp ]] || return 1
+    boot_id=$(shell_target 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d ' \r\n')
+    [[ -n $boot_id && $stamp == "$boot_id" ]]
+}
+
 run_attempt() {
     attempt=$1; stamp=$(date +%Y%m%d-%H%M%S)
     campaign="$LOG_ROOT/camp-$stamp"; output="$campaign/attempt-$attempt"
@@ -130,18 +142,17 @@ run_attempt() {
     # module_loaded_via_stamp: boot-scoped root-side marker (hidden-module
     # profile no longer lists in /proc/modules, and the gated handshake must
     # fail for this unprivileged shell).
-    module_loaded_via_stamp() {
-        local stamp boot_id
-        stamp=$(shell_target 'cat /data/local/tmp/ksu-live.stamp 2>/dev/null' 2>/dev/null | tr -d ' \r\n')
-        [[ -n $stamp ]] || return 1
-        boot_id=$(shell_target 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d ' \r\n')
-        [[ -n $boot_id && $stamp == "$boot_id" ]]
-    }
-    if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp || [[ -n $(shell_target 'pidof ic98260') ]]; then
+    if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp; then
         record 'REFUSED module_or_runner_already_present'; return 2
+    fi
+    if [[ -n $(shell_target 'pidof ic98260') ]]; then
+        record 'REFUSED runner_already_present'; return 2
     fi
     stage_payloads || { record 'REFUSED payload_staging_failed'; return 2; }
     record "ATTEMPT_LAUNCH number=$attempt"
+    # Reset boot-scoped evidence from previous boots: the root exposure
+    # matrix and liveness stamp must reflect THIS attempt only.
+    adb_target shell 'rm -f /data/local/tmp/ksu-exposure-root.txt /data/local/tmp/ksu-live.stamp' >/dev/null 2>&1 || true
     if [[ $DEBUG == 1 ]]; then adb_target shell 'rm -f /data/local/tmp/kmsg-this-boot.txt /data/local/tmp/pstore*.bin' >/dev/null 2>&1 || true; fi
     adb_target shell "cd /data/local/tmp; rm -f iq.log hkd_base hkd_go hkd_open; KSU_RUNNER_DEBUG=$DEBUG setsid sh -c './ic98260 fake >iq.log 2>&1 </dev/null &'" >/dev/null 2>&1 || {
         record 'REFUSED launch_command_failed'; return 2;
@@ -195,7 +206,11 @@ attempt=0
 while [[ $attempt -lt $COUNT ]]; do
     ready || { record 'NEEDS_DEVICE target_not_ready'; exit 2; }
     check_target || { record 'REFUSED_TARGET_MISMATCH'; exit 2; }
-    [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp || [[ -n $(shell_target 'pidof ic98260') ]] && { record 'MODULE_LISTED preserving_loaded_module'; exit 0; }
+    # Module liveness only: a parked bootstrap process must fall through to
+    # the recovery branch below (reboot/retry), not be classified as success.
+    if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp; then
+        record 'MODULE_LISTED preserving_loaded_module'; exit 0
+    fi
     old=$(shell_target 'cat /proc/sys/kernel/random/boot_id')
     if [[ -n $(shell_target 'pidof ic98260') ]]; then
         if [[ $attempt -ge $COUNT ]]; then record 'ATTEMPT_LIMIT parked_process_needs_manual_reboot'; exit 1; fi

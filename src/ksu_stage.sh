@@ -23,8 +23,9 @@ stamp_live() {
 }
 record_exposure() {
     # Root-side visibility matrix; pulled by the runner as evidence.
+    # First line records the boot id so stale files are detectable.
     if [ -x /data/local/tmp/ksu_exposure_probe ]; then
-        /data/local/tmp/ksu_exposure_probe > /data/local/tmp/ksu-exposure-root.txt 2>&1
+        { cat /proc/sys/kernel/random/boot_id; /data/local/tmp/ksu_exposure_probe; } > /data/local/tmp/ksu-exposure-root.txt 2>&1
     fi
 }
 if module_live; then

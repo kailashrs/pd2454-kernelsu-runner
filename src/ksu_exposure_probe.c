@@ -133,34 +133,49 @@ int main(void)
     check_file_lines("devices", "/proc/devices");
     check_file_lines("misc", "/proc/misc");
 
-    /* dmesg ring via syslog(2) */
+    /* dmesg ring via syslog(2): query the full ring size, then one
+     * SYSLOG_ACTION_READ_ALL pass (action 3 is non-consuming, so repeated
+     * small reads return the same newest chunk, not pagination). */
     {
-        char buf[4096];
-        int hits = 0;
+        char *buf;
+        long size;
 
-        rc = syscall(SYS_syslog, 3, buf, (long)sizeof(buf) - 1); /* action 3 = read all */
+        rc = syscall(SYS_syslog, 10, NULL, 0); /* action 10 = size buffer */
         if (rc < 0) {
             printf("dmesg=errno_%ld\n", rc);
         } else {
-            for (int chunk = 0; chunk < 24 && rc > 0; chunk++) {
+            size = rc;
+            if (size > 8 * 1024 * 1024)
+                size = 8 * 1024 * 1024;
+            buf = malloc((size_t)size + 1);
+            if (!buf) {
+                printf("dmesg=oom\n");
+            } else {
+                int hits = 0;
                 char *p;
-                buf[rc < (long)sizeof(buf) - 1 ? rc : (long)sizeof(buf) - 1] = 0;
-                p = buf;
-                while ((p = strstr(p, "ernelsu")) != NULL) {
-                    hits++;
-                    p += 7;
+
+                rc = syscall(SYS_syslog, 3, buf, size);
+                if (rc < 0) {
+                    printf("dmesg=read_errno_%ld\n", rc);
+                } else {
+                    buf[rc < size ? rc : size] = 0;
+                    p = buf;
+                    while ((p = strcasestr(p, "kernelsu")) != NULL) {
+                        hits++;
+                        p += 8;
+                    }
+                    p = buf;
+                    while ((p = strcasestr(p, "ksu")) != NULL) {
+                        hits++;
+                        p += 3;
+                    }
+                    if (hits)
+                        printf("dmesg=HITS_%d\n", hits);
+                    else
+                        printf("dmesg=CLEAN\n");
                 }
-                p = buf;
-                while ((p = strstr(p, "KSU")) != NULL) {
-                    hits++;
-                    p += 3;
-                }
-                rc = syscall(SYS_syslog, 3, buf, (long)sizeof(buf) - 1);
+                free(buf);
             }
-            if (hits)
-                printf("dmesg=HITS_%d\n", hits);
-            else
-                printf("dmesg=CLEAN\n");
         }
     }
 

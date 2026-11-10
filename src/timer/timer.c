@@ -1268,7 +1268,42 @@ static void hkd_capture_diag(void)
  *      base (.bss+0x710) must read 0xdeadbeef (init signature);
  *   4. post the bases; after the parent's writes, re-read every cleared
  *      slot to verify the zeros landed. */
-/* 1 only after KernelSU reaches the module loader's Live state. */
+/* 1 only after KernelSU reaches the module loader's Live state.  The
+ * hidden-module profile no longer lists in /proc/modules, so the stage
+ * stamps a boot-scoped liveness marker after its root-side gated-supercall
+ * verification succeeds; accept that marker as equivalent evidence. */
+static int stamp_listed(void)
+{
+    char stamp[128];
+    char boot[128];
+    int fd, i;
+    ssize_t n;
+
+    fd = open("/data/local/tmp/ksu-live.stamp", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return 0;
+    n = read(fd, stamp, sizeof(stamp) - 1);
+    close(fd);
+    if (n <= 0)
+        return 0;
+    stamp[n] = 0;
+    for (i = 0; i < (int)n; i++)
+        if (stamp[i] == '\n' || stamp[i] == '\r') { stamp[i] = 0; break; }
+
+    fd = open("/proc/sys/kernel/random/boot_id", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return 0;
+    n = read(fd, boot, sizeof(boot) - 1);
+    close(fd);
+    if (n <= 0)
+        return 0;
+    boot[n] = 0;
+    for (i = 0; i < (int)n; i++)
+        if (boot[i] == '\n' || boot[i] == '\r') { boot[i] = 0; break; }
+
+    return strcmp(stamp, boot) == 0;
+}
+
 static int module_listed(void)
 {
     int mods = open("/proc/modules", O_RDONLY | O_CLOEXEC);
@@ -1286,7 +1321,7 @@ static int module_listed(void)
             listed = ksu_module_buffer_live(mbuf);
         }
     }
-    return listed;
+    return listed || stamp_listed();
 }
 
 /*
@@ -2050,8 +2085,9 @@ static void write_ksu_script(void)
         "}\n"
         "record_exposure() {\n"
         "    # Root-side visibility matrix; pulled by the runner as evidence.\n"
+        "    # First line records the boot id so stale files are detectable.\n"
         "    if [ -x /data/local/tmp/ksu_exposure_probe ]; then\n"
-        "        /data/local/tmp/ksu_exposure_probe > /data/local/tmp/ksu-exposure-root.txt 2>&1\n"
+        "        { cat /proc/sys/kernel/random/boot_id; /data/local/tmp/ksu_exposure_probe; } > /data/local/tmp/ksu-exposure-root.txt 2>&1\n"
         "    fi\n"
         "}\n"
         "if module_live; then\n"
