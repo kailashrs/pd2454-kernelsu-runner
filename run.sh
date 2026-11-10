@@ -108,7 +108,7 @@ pull_evidence() {
     done
 }
 stage_payloads() {
-    for entry in bin/ic98260:ic98260 bin/ksupatch:ksupatch bin/insmodf:insmodf ksu/kernelsu.ko:kernelsu.ko; do
+    for entry in bin/ic98260:ic98260 bin/ksupatch:ksupatch bin/insmodf:insmodf bin/ksuquery:ksuquery bin/ksu_exposure_probe:ksu_exposure_probe ksu/kernelsu.ko:kernelsu.ko; do
         local_file="$ROOT/${entry%:*}"; remote_name=${entry#*:}
         [[ -s $local_file ]] || { record "REFUSED missing_payload=$local_file"; return 1; }
         expected=$(shasum -a 256 "$local_file" | awk '{print $1}')
@@ -127,7 +127,17 @@ run_attempt() {
     mkdir -p "$output" "$campaign/inherited"
     pull_evidence "$campaign/inherited"
     if ! check_target; then record 'REFUSED target_mismatch'; return 2; fi
-    if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") || -n $(shell_target 'pidof ic98260') ]]; then
+    # module_loaded_via_stamp: boot-scoped root-side marker (hidden-module
+    # profile no longer lists in /proc/modules, and the gated handshake must
+    # fail for this unprivileged shell).
+    module_loaded_via_stamp() {
+        local stamp boot_id
+        stamp=$(shell_target 'cat /data/local/tmp/ksu-live.stamp 2>/dev/null' 2>/dev/null | tr -d ' \r\n')
+        [[ -n $stamp ]] || return 1
+        boot_id=$(shell_target 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d ' \r\n')
+        [[ -n $boot_id && $stamp == "$boot_id" ]]
+    }
+    if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp || [[ -n $(shell_target 'pidof ic98260') ]]; then
         record 'REFUSED module_or_runner_already_present'; return 2
     fi
     stage_payloads || { record 'REFUSED payload_staging_failed'; return 2; }
@@ -150,6 +160,12 @@ run_attempt() {
     done
     [[ $outcome != RUNNING ]] || outcome=WINDOW-ELAPSED
     pull_evidence "$output"
+    # Visibility evidence: unprivileged matrix (must be clean on hardened
+    # builds), the gated handshake as an unprivileged caller (must be
+    # KSU_ABSENT), and the root-side matrix recorded by the stage.
+    adb_target shell /data/local/tmp/ksu_exposure_probe >"$output/exposure_unpriv.txt" 2>&1 || true
+    adb_target shell /data/local/tmp/ksuquery >"$output/ksuquery_unpriv.txt" 2>&1 || true
+    adb_target pull /data/local/tmp/ksu-exposure-root.txt "$output/" >/dev/null 2>&1 || true
     if [[ $DEBUG == 1 ]]; then
     adb_target shell 'getenforce; cat /proc/sys/kernel/random/boot_id; grep kernelsu /proc/modules' >"$output/state.txt" 2>&1 || true
     printf 'outcome=%s\n' "$outcome" >"$output/outcome.txt"
@@ -179,7 +195,7 @@ attempt=0
 while [[ $attempt -lt $COUNT ]]; do
     ready || { record 'NEEDS_DEVICE target_not_ready'; exit 2; }
     check_target || { record 'REFUSED_TARGET_MISMATCH'; exit 2; }
-    [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] && { record 'MODULE_LISTED preserving_loaded_module'; exit 0; }
+    [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp || [[ -n $(shell_target 'pidof ic98260') ]] && { record 'MODULE_LISTED preserving_loaded_module'; exit 0; }
     old=$(shell_target 'cat /proc/sys/kernel/random/boot_id')
     if [[ -n $(shell_target 'pidof ic98260') ]]; then
         if [[ $attempt -ge $COUNT ]]; then record 'ATTEMPT_LIMIT parked_process_needs_manual_reboot'; exit 1; fi

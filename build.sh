@@ -18,7 +18,9 @@ mkdir -p bin
 for helper in ksupatch insmodf; do
  "$compiler" -O2 -static -Wall -Wextra "src/$helper.c" -o "bin/$helper"
 done
-for binary in bin/ic98260 bin/ksupatch bin/insmodf; do
+"$compiler" -O2 -static -Wall -Wextra src/ksuquery.c -o bin/ksuquery
+"$compiler" -O2 -static -Wall -Wextra src/ksu_exposure_probe.c -o bin/ksu_exposure_probe
+for binary in bin/ic98260 bin/ksupatch bin/insmodf bin/ksuquery bin/ksu_exposure_probe; do
  "$stripper" "$binary"
  shasum -a 256 "$binary"
 done

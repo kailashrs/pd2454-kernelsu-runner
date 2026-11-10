@@ -6,9 +6,31 @@ km() {
     echo "$message"
     if [ "${KSU_RUNNER_DEBUG:-0}" = 1 ]; then echo "$message" >> "$TRACE"; sync; fi
 }
-module_live() { grep -q '^kernelsu .* Live ' /proc/modules; }
+module_live() {
+    # Hidden-module profile: the module may no longer appear in /proc/modules.
+    # ksuquery runs as root here and must obtain the version through the gated
+    # supercall handshake; on older unhided builds the /proc/modules line also
+    # still counts.
+    if grep -q '^kernelsu .* Live ' /proc/modules; then
+        return 0
+    fi
+    [ -x /data/local/tmp/ksuquery ] && /data/local/tmp/ksuquery 2>/dev/null | grep -q '^KSU_VERSION='
+}
+stamp_live() {
+    # Boot-scoped marker so the host runner (unprivileged shell, for which the
+    # gated handshake must fail) can still detect a loaded-and-hidden module.
+    cat /proc/sys/kernel/random/boot_id > /data/local/tmp/ksu-live.stamp 2>/dev/null
+}
+record_exposure() {
+    # Root-side visibility matrix; pulled by the runner as evidence.
+    if [ -x /data/local/tmp/ksu_exposure_probe ]; then
+        /data/local/tmp/ksu_exposure_probe > /data/local/tmp/ksu-exposure-root.txt 2>&1
+    fi
+}
 if module_live; then
     echo KSU_LOADED
+    stamp_live
+    record_exposure
     echo 1 > /sys/fs/selinux/enforce
     exit 0
 fi
@@ -32,6 +54,8 @@ km "candidate insmodf rc=$rc"
 if [ "${KSU_RUNNER_DEBUG:-0}" = 1 ]; then dmesg 2>/dev/null | tail -60; fi
 if [ "$rc" -eq 0 ] && module_live; then
     echo KSU_LOADED
+    stamp_live
+    record_exposure
     echo 1 > /sys/fs/selinux/enforce
     km "candidate live; enforce=$(getenforce)"
     exit 0
