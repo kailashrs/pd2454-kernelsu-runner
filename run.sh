@@ -20,7 +20,7 @@ done
 [[ $COUNT -ge 1 && $COUNT -le 100 ]] || { echo 'attempt-count must be 1..100' >&2; exit 2; }
 [[ $DEVICE_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo '--device-id ro.serialno is required' >&2; exit 2; }
 
-KERNEL=6.6.127-android15-8-g3b723d0e8507-abogki558056638-4k
+KERNEL=6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k
 FINGERPRINT=vivo/PD2454/PD2454:17/CP2A.260605.016_V000L1/261030013318:user/release-keys
 ROOT=$(cd -- "$(dirname -- "$0")" && pwd)
 LOG_ROOT="$ROOT/logs"

