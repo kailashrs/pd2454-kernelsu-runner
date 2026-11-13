@@ -24,6 +24,9 @@ done
 # fingerprint makes that pair's fingerprint advisory: it is logged for the
 # record but not enforced, until it can be pinned from a real flash.
 TARGET_PAIRS=(
+    # gd489d4ad2a70 is shared by 17.2.11.5 and 17.2.12.0: the 12.0 boot image
+    # kernel (carved 2026-11-13, boot_17.2.12.0.kernel) is byte-identical to
+    # the 11.5 build; only the AVB descriptor fingerprint timestamp changed.
     '6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k|'
     '6.6.127-android15-8-g3b723d0e8507-abogki558056638-4k|vivo/PD2454/PD2454:17/CP2A.260605.016_V000L1/261030013318:user/release-keys'
 )
